@@ -1,0 +1,109 @@
+#+TITLE: collidxr
+#+DESCRIPTION: modula t.'s extensions for cl-collider.
+
+This is a small collection of extensions for working with [[https://github.com/byulparan/cl-collider][cl-collider]]. It includes:
+
+- Pseugens (pseudo-ugens) like ~b2~.
+- Syntax sugar like ~ds~ (wrapping ~defsynth~) and ~dn~ (wrapping ~proxy~).
+- Convenience functions like ~plot~.
+- Maybe more in the future?
+
+Refer to the "Features" section below for a more detailed overview of the provided functionality.
+
+NOTE: This library should be considered to be in "beta" stages. You will probably run into a bug or two, so it's advised not to depend on its functionality for a live performance yet.
+
+* Intro
+
+collidxr is not yet part of Quicklisp, but the plan is to have it added in the future.
+
+In the meantime, it can be installed manually by cloning the repo into your Quicklisp ~local-projects~ directory.
+
+Once you've done that, you can simply run ~(ql:quickload "collidxr")~ in your REPL to load it into Lisp.
+
+* Features
+
+** ~plot~
+
+Show a graphical plot of the provided data. Data can be:
+
+- A list of numbers
+- A cl-collider ~buffer~
+- A ~pattern~ (when [[https://github.com/defaultxr/cl-patterns][cl-patterns]] is loaded)
+- A ~bdef~ (when [[https://github.com/defaultxr/bdef][bdef]] is loaded)
+
+** ~b2~
+
+Wrap the provided ugen in a ~pan2.ar~ or ~balance2.ar~ as appropriate. In other words, if ~IN~ is mono, wrap it in ~pan2.ar~, and if ~IN~ is stereo, wrap it in ~balance2.ar~. ~PAN~ and ~LEVEL~ are the panning and amplitude arguments, respectively.
+
+** ~ds~
+
+"Define Synth"; syntax sugar wrapping ~defsynth~. It does the following:
+
+- If not specified by the user, auto-inserts extra parameters with sensible defaults: ~dur~, ~tempo~, ~amp~, ~pan~, ~out~.
+- Provides a more concise syntax for writing synthdefs - no ~let*~ needed!
+- Automatically adds arguments for ~dur~, ~tempo~, ~pan~, ~amp~, and ~out~ with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
+- Automatically marks variables named ~-~ as ignorable.
+- If a variable named ~out~ is defined, it is automatically fed into an ~out.ar~. In other words, the ~out~ argument will "just work".
+- If ~out~ is not defined but ~sig~ is, it is automatically fed into a ~b2~ inside an ~out.ar~. In other words, the ~pan~, ~amp~, and ~out~ arguments will "just work".
+
+Unlike ~defsynth~, you don't need to use ~let*~. Instead, specify the synthdef's body as a set of pairs of names and ugens, like ~cl-patterns:pbind~. Effectively, the ~let*~ is implied, as each name is given the ugen as its value.
+
+For example, you can write this:
+
+#+begin_src lisp
+  (ds :foo ((gate 1) (freq 440))
+    :env (env-gen.kr (env-adsr 0.01 0.1 0.5 0.1) :gate gate :act :free)
+    :sig (pulse.ar freq)
+    :sig (rlpf.ar sig (* freq 2) 0.5)
+    :sig (* sig env)
+    :- (poll.kr (impulse.kr 1) sig))
+#+end_src
+
+instead of this:
+
+#+begin_src lisp
+  (defsynth :foo ((gate 1) (freq 440) (pan 0) (amp 0.5) (out 0))
+    (let* ((env (env-gen.kr (adsr 0.01 0.1 0.5 0.1) :gate gate :act :free))
+           (sig (pulse.ar freq))
+           (sig (rlpf.ar sig (* freq 2) 0.5))
+           (sig (* sig env))
+           (ign (poll.kr (impulse.kr 1) sig)))
+      (declare (ignore ign))
+      (out.ar out (pan2.ar sig pan amp))))
+#+end_src
+
+In the future, it might also:
+
+- Allow specifying a ControlSpec, lag time, rate (~:ar~, ~:kr~, etc) for each parameter.
+- Allow output with ~replace-out.ar~ instead of only ~out.ar~.
+
+** ~synth-variant~
+
+Like ~cl-collider:synth~, but can also start a synth variant. To specify a variant, ~NAME~ should be in the format ~NAME.VARIANT~.
+
+Synth variants are specified in the synthdef metadata. Set the metadata key ~:VARIANTS~ to a plist mapping the name of the variant to the plist of arguments to the synthdef.
+
+Example:
+
+#+begin_src lisp
+  ;; define the \"noisy\" variant for the :tb303 synth:
+  (setf (synthdef-metadata :tb303 :variants) (list :noisy (list :dist 1 :clip 1 :bias 1)))
+
+  ;; play the variant:
+  (synth-variant :tb303.noisy :freq 420 :dist 0) ; notice that you can override the arguments set in the variant.
+
+  ;; the above is the same as doing:
+  (synth :tb303 :freq 420 :dist 0 :clip 1 :bias 1)
+#+end_src
+
+** ~dn~
+
+"Define Node"; syntax sugar wrapping ~proxy~. In addition to its standard functionality, it also does the following:
+
+- ~pbind~-like syntax (no ~let*~).
+- Can be referenced by omitting the body (i.e. ~(dn :name)~).
+- ~ARGS~ are inserted as ~with-controls~.
+- Bindings named ~_~ or ~-~ are automatically declared ignorable.
+- When ~:fx~ is provided as the first item in ~ARGS~, allocate a 2-channel bus and bind ~sig~ to ~(in.ar BUS 2)~.
+- Can be provided as an ~:instrument~ in a ~pbind~ to set the parameters of the node.
+- Can be provided as an ~:out~ in a ~pbind~ to send the output of triggered synths to the node (for use with ~:fx~ nodes).
