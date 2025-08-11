@@ -3,7 +3,7 @@
 (defsystem #:collidxr
   :name "collidxr"
   :description "modula t.'s extensions for cl-collider."
-  :version "0.1"
+  :version "0.8"
   :author "modula t."
   :license "MIT"
   :homepage "https://github.com/defaultxr/collidxr"
