@@ -16,18 +16,18 @@
 
 (test system-attributes
   "Check that the system has all the standard attributes"
-  (let ((missing (system-missing-attributes '#:#| TMPL_VAR name |#)))
+  (let ((missing (system-missing-attributes '#:collidxr)))
     (is-false missing
               "The system definition is missing attributes: ~S" missing)))
 
 (test undocumented-symbols
   "Check for any undocumented exported symbols"
-  (let ((undocumented (package-undocumented-symbols '#:#| TMPL_VAR name |#)))
+  (let ((undocumented (package-undocumented-symbols '#:collidxr)))
     (is-false undocumented
               "some exported symbols do not have docstrings: ~S" undocumented)))
 
 (test docstrings-broken-links
   "Check for any broken links in docstrings of exported symbols"
-  (let ((symbols (package-docstrings-with-broken-links '#:#| TMPL_VAR name |#)))
+  (let ((symbols (package-docstrings-with-broken-links '#:collidxr)))
     (is-false symbols
               "some exported symbols have docstrings that contain broken links: ~S" symbols)))
