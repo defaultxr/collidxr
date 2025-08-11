@@ -10,7 +10,7 @@ This is a small collection of extensions for working with [[https://github.com/b
 
 Refer to the "Features" section below for a more detailed overview of the provided functionality.
 
-NOTE: This library should be considered to be in "beta" stages. You will probably run into a bug or two, so it's advised not to depend on its functionality for a live performance yet.
+*NOTE:* This library should be considered to be in "beta" stages. You will probably run into a bug or two, so it's advised not to depend on its functionality for a live performance yet.
 
 * Intro
 
@@ -33,7 +33,7 @@ Show a graphical plot of the provided data. Data can be:
 
 ** ~b2~
 
-Wrap the provided ugen in a ~pan2.ar~ or ~balance2.ar~ as appropriate. In other words, if ~IN~ is mono, wrap it in ~pan2.ar~, and if ~IN~ is stereo, wrap it in ~balance2.ar~. ~PAN~ and ~LEVEL~ are the panning and amplitude arguments, respectively.
+Wrap the provided ugen in a ~pan2.ar~ or ~balance2.ar~ as appropriate. In other words, if ~IN~ is mono, wrap it in ~pan2.ar~, or if ~IN~ is stereo, wrap it in ~balance2.ar~. ~PAN~ and ~LEVEL~ are the panning and amplitude arguments, respectively.
 
 ** ~ds~
 
@@ -74,7 +74,7 @@ instead of this:
 
 In the future, it might also:
 
-- Allow specifying a ControlSpec, lag time, rate (~:ar~, ~:kr~, etc) for each parameter.
+- Allow specifying a ControlSpec, lag time, and rate (~:ar~, ~:kr~, etc) for each parameter.
 - Allow output with ~replace-out.ar~ instead of only ~out.ar~.
 
 ** ~synth-variant~

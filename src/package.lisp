@@ -14,5 +14,4 @@
            #:ds
            #:synth-variant
 
-           #:*dn-dictionary*
            #:dn))

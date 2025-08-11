@@ -4,13 +4,6 @@
 
 ;;; plotting
 
-;; (defmethod plot ((data list))
-;;   )
-
-;; (defmethod plot ((data hash-table))
-;;   (vgplot:plot))
-
-;; FIX
 (defgeneric plot* (backend input &rest args &key &allow-other-keys)
   (:documentation "Plot INPUT with BACKEND. Typically you can just call `plot' instead."))
 
@@ -128,13 +121,11 @@ See also: `modify-params', `ds'"
   "Parse a lambda list for a synth or node definition. Returns the altered lambda list, altered body, gensyms, and metadata as values."
   (when (eql 0 (position :fx args))
     (setf args (cdr args))
-    (if (eql type 'ds)
-        (progn
-          (setf body (list* :sig `(in.ar in 2) body))
+    (ecase type
+      (ds (setf body (list* :sig `(in.ar in 2) body))
           (unless (find 'in args :test #'string-equal :key #'car)
             (setf args (list* (list (intern "IN") 0) args))))
-        (progn
-          (unless (synthdef-metadata synth-name :input-bus)
+      (dn (unless (synthdef-metadata synth-name :input-bus)
             (setf (synthdef-metadata synth-name :input-bus) (bus-audio :chanls 2)))
           (setf body (list* :sig `(in.ar ,(busnum (synthdef-metadata synth-name :input-bus)) 2) body)))))
   ;; FIX: :ctl ?
@@ -157,7 +148,9 @@ Example:
 ;;   :sig (rlpf.ar sig (* freq 2) 0.5)
 ;;   :- (poll.kr (impulse.kr 1) sig)
 ;;   :sig (pan2.ar sig pan (* amp env))
-;;   :out sig)"
+;;   :out sig)
+
+See also: `dn'"
   (check-type body property-list)
   (let ((fx-p (eql :fx (car args)))
         (sig (intern "SIG" *package*))
@@ -189,11 +182,6 @@ Example:
                                             :append (list (make-keyword (symbol-name arg-name)) arg-name))))
                (export ',package-symbol ,package-name)))))))
 
-(defmacro sdef (name &optional args &body body) ; FIX
-  (print name)
-  (print args)
-  (print body))
-
 (defun synth-variant (name &rest args) ; FIX: should also accept :variant or :-variant in ARGS to specify the variant
   "Like `cl-collider:synth', but can also start a synth variant. To specify a variant, NAME should be in the format NAME.VARIANT.
 
@@ -217,38 +205,6 @@ See also: `cl-collider:synth'"
 
 ;;; dn
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defclass ndef () ; FIX: remove, or implement?
-    ((name :initarg :name :type symbol)
-     (nodes :initarg :nodes )
-     (controls :initarg :controls)
-     ;; bus too?
-     (metadata :initarg :metadata))))
-
-(define-dictionary ndef)
-
-(defun ndef (key &optional (body nil value-supplied-p) &key (type :normal))
-  (when (or (not (null value))
-            value-supplied-p)
-    (when-let (node (ndef-ref-get key :node))
-      (ctrl node :gate 0))
-    (ndef-ref-set key :node (when body (play body))))
-  (make-instance 'ndef :key key))
-
-(defmethod ndef-bus ((ndef ndef))
-  (ndef-ref-get (slot-value ndef 'key) :bus))
-
-;;; dn
-
-(defvar *dn-dictionary* (make-hash-table)
-  "The global dictionary for dn.")
-
-(defclass dn ()
-  ((proxy :initarg :proxy :initform nil :accessor dn-proxy :documentation "The actual node that the dn points to.")))
-
-(defun make-dn ()
-  nil)
-
 (defun find-dn (name)
   "Find a `dn' by name."
   (gethash name (cl-collider::node-proxy-table *s*)))
@@ -260,7 +216,9 @@ See also: `cl-collider:synth'"
 - `pbind'-like syntax (no `let*').
 - ARGS are inserted as `with-controls'.
 - Bindings named _ or - are automatically declared ignorable.
-- When :fx is provided as an item in ARGS, allocate a 2-channel bus and bind sig to (in.ar BUS 2)."
+- When :fx is provided as an item in ARGS, allocate a 2-channel bus and bind sig to (in.ar BUS 2).
+
+See also: `ds'"
   (when (and (null args-p)
              (null body))
     (return-from dn `(find-dn ,name)))
