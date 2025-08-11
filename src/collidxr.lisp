@@ -47,7 +47,7 @@
 (defun modify-params (params) ; FIX: maybe we should try to auto-detect the use of a GATE argument and inject it if it's used? it would certainly be convenient...
   "Get PARAMS, a `defsynth' argument list, altered to include dur, tempo, amp, pan, and out arguments if they're not already specified.
 
-See also: `modify-body', `ds'"
+See also: `ds'"
   (let ((param-names (mapcar #'car params)))
     (dolist (x (list (list (intern "DUR" *package*) 1)
                      (list (intern "TEMPO" *package*) 1)
@@ -57,28 +57,6 @@ See also: `modify-body', `ds'"
       (unless (position (car x) param-names)
         (setf params (append params (list x)))))
     params))
-
-(defun modify-body (body)
-  "Get BODY, a `defsynth' body, altered to `declare' dur, tempo, amp, pan, and out ignorable.
-
-See also: `modify-params', `ds'"
-  (append (list (list 'declare (list 'ignorable
-                                     (intern "DUR" *package*)
-                                     (intern "TEMPO" *package*)
-                                     (intern "AMP" *package*)
-                                     (intern "PAN" *package*))))
-          body))
-
-(defmacro defsynth* (name params &body body) ; FIX: merge into `ds'
-  "Like `cl-collider:defsynth' but includes some extra features, such as:
-
-- If not already provided, include extra arguments with sensible defaults: dur, tempo, amp, pan, out"
-  ;; - The ability to specify a ControlSpec for each parameter ; FIX: not implemented yet
-  ;; - Automatic inclusion of some ugens (i.e. out.ar, pan2.ar, etc) unless another is included ; FIX: not implemented yet
-  (let ((params (modify-params params))
-        (body (modify-body body)))
-    `(defsynth ,name ,params
-       ,@body)))
 
 ;;; ds
 
@@ -154,33 +132,36 @@ See also: `dn'"
   (check-type body property-list)
   (let ((fx-p (eql :fx (car args)))
         (sig (intern "SIG" *package*))
+        (dur (intern "DUR" *package*))
+        (tempo (intern "TEMPO" *package*))
         (pan (intern "PAN" *package*))
         (amp (intern "AMP" *package*))
         (out (intern "OUT" *package*)))
     (multiple-value-bind (args body gensyms metadata) (parse-ds-args-and-body name args body :type 'ds)
-      `(prog1 (defsynth* ,name ,args
-                (let* ,(remove out body :key #'car)
-                  ,@(when gensyms
-                      `((declare (ignorable ,@gensyms))))
-                  (,(if fx-p 'replace-out.ar 'out.ar)
-                   ,out
-                   ,(or (cadr (assoc out body))
-                        `(b2 ,sig ,pan ,(if (assoc 'env body)
-                                            `(* env ,amp)
-                                            amp))))))
-         ,(when metadata
-            `(doplist (k v (list ,@metadata))
-               (setf (synthdef-metadata ,name k) v)))
-         ,(let ((package-symbol (ensure-symbol name *ds-synth-package*))
-                (package-name (package-name *ds-synth-package*))
-                (defun-args (append (list '&key) (mapcar (fn (subseq _ 0 2)) args))))
-            `(progn
-               (cl:defun ,package-symbol ,defun-args
-                 (cl-collider:synth ',name
-                                    ,@(loop :for arg :in args
-                                            :for arg-name := (car arg)
-                                            :append (list (make-keyword (symbol-name arg-name)) arg-name))))
-               (export ',package-symbol ,package-name)))))))
+      (let ((args (modify-params args)))
+        `(prog1 (defsynth ,name ,args
+                  (declare (ignorable ,dur ,tempo))
+                  (let* ,(remove out body :key #'car)
+                    ,@(when gensyms
+                        `((declare (ignorable ,@gensyms))))
+                    (,(if fx-p 'replace-out.ar 'out.ar)
+                     ,out
+                     ,(or (cadr (assoc out body))
+                          `(b2 ,sig ,pan ,(if (assoc 'env body)
+                                              `(* env ,amp)
+                                              amp))))))
+           ,@(when metadata
+               `((doplist (k v (list ,@metadata))
+                   (setf (synthdef-metadata ,name k) v))))
+           ,@(let ((package-symbol (ensure-symbol name *ds-synth-package*))
+                   (package-name (package-name *ds-synth-package*))
+                   (defun-args (append (list '&key) (mapcar (fn (subseq _ 0 2)) args))))
+               `((cl:defun ,package-symbol ,defun-args
+                   (cl-collider:synth ',name
+                                      ,@(loop :for arg :in args
+                                              :for arg-name := (car arg)
+                                              :append (list (make-keyword (symbol-name arg-name)) arg-name))))
+                 (export ',package-symbol ,package-name))))))))
 
 (defun synth-variant (name &rest args) ; FIX: should also accept :variant or :-variant in ARGS to specify the variant
   "Like `cl-collider:synth', but can also start a synth variant. To specify a variant, NAME should be in the format NAME.VARIANT.
