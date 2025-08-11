@@ -113,10 +113,18 @@ See also: `ds'"
 (defparameter *ds-synth-package* (uiop:ensure-package 'synths) ; FIX: make optional?
   "The package that `ds' will define synths in.")
 
-(defmacro ds (name args &body body)
-  ;; FIX: need to allow the use of replace-out.ar instead of always only out.ar.
-  ;; FIX: allow arguments to include lag time, rate (i.e. :ir, :tr, :kr, :ar), a spec, etc
-  "Syntax sugar for defining synths. Unlike `defsynth', you don't need to use `let*'. Instead, specify the synthdef's body as a set of pairs of names and ugens, similar to using `cl-patterns:pbind' Effectively, the `let*' is implied, as each name is given the value of the ugen. Use \"-\" for unused/ignored ugens and \"out\" for the synth's output.
+;;; ds
+
+;; FIX: need to allow the use of replace-out.ar instead of always only out.ar.
+;; FIX: allow arguments to include lag time, rate (i.e. :ir, :tr, :kr, :ar), a spec, etc
+(defmacro ds (name params &body body)
+  "\"Define Synth\"; syntax sugar wrapping `defsynth'. It does the following:
+
+- Provides a more concise syntax for writing synthdefs; BODY is simply a plist mapping variable names to their values. No `let*' needed!
+- If not specified by the user, auto-inserts parameters for dur, tempo, pan, amp, and out with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
+- Bindings named - or _ are automatically declared ignorable.
+- If out is bound in BODY, its value is automatically used as the input for an `out.ar'.
+- If there is no out in BODY but there is a sig, sig is automatically fed into a `b2' inside an `out.ar'. In other words, the pan, amp, and out arguments will \"just work\".
 
 Example:
 
@@ -191,13 +199,26 @@ See also: `cl-collider:synth'"
   (gethash name (cl-collider::node-proxy-table *s*)))
 
 ;; FIX: use sig if out is not provided
-(defmacro dn (name &optional (args nil args-p) &body body)
+;; FIX: is it possible to have TEMPO automatically updated when the tempo in cl-patterns is changed?
+(defmacro dn (name &optional (params nil params-p) &body body) ; FIX: should also include dur, tempo, etc, as per `add-standard-params'
   "\"Define Node\"--define a named node proxy. Similar to `cl-collider:proxy', but with the following additional features:
 
-- `pbind'-like syntax (no `let*').
-- ARGS are inserted as `with-controls'.
-- Bindings named _ or - are automatically declared ignorable.
-- When :fx is provided as an item in ARGS, allocate a 2-channel bus and bind sig to (in.ar BUS 2).
+- Provides a more concise syntax for writing proxies; BODY is simply a plist mapping variable names to their values. No `let*' needed!
+- PARAMS are inserted as `with-controls'.
+- Without BODY, just returns the node.
+- If not specified by the user, auto-inserts parameters for dur, tempo, pan, amp, and out with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
+- Bindings named - or _ are automatically declared ignorable.
+- :pos binding can be used to specify the :pos of the node within its group (i.e. :head, :tail, etc).
+- When :fx is the first element of PARAMS, allocate a 2-channel bus and bind sig to (in.ar BUS 2).
+- If out is bound in BODY, its value is automatically used as the input for an `out.ar'.
+- If there is no out in BODY but there is a sig, sig is automatically fed into a `b2' inside an `out.ar'. In other words, the pan, amp, and out arguments will \"just work\".
+- Can be provided as an :instrument in a `cl-patterns:pbind' to set the parameters of the node.
+- Can be provided as an :out in a `cl-patterns:pbind' to send the output of triggered synths to the node (for use with :fx nodes).
+
+Example:
+
+;; (dn :echo (:fx (time 1.0) (decay 0.5))
+;;   :sig (comb-c.ar sig 1 time decay))
 
 See also: `ds'"
   (when (and (null args-p)

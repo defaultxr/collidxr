@@ -39,16 +39,18 @@ Wrap the provided ugen in a ~pan2.ar~ or ~balance2.ar~ as appropriate. In other 
 
 "Define Synth"; syntax sugar wrapping ~defsynth~. It does the following:
 
-- If not specified by the user, auto-inserts extra parameters with sensible defaults: ~dur~, ~tempo~, ~amp~, ~pan~, ~out~.
-- Provides a more concise syntax for writing synthdefs - no ~let*~ needed!
-- Automatically adds arguments for ~dur~, ~tempo~, ~pan~, ~amp~, and ~out~ with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
-- Automatically marks variables named ~-~ as ignorable.
-- If a variable named ~out~ is defined, it is automatically fed into an ~out.ar~. In other words, the ~out~ argument will "just work".
-- If ~out~ is not defined but ~sig~ is, it is automatically fed into a ~b2~ inside an ~out.ar~. In other words, the ~pan~, ~amp~, and ~out~ arguments will "just work".
+- Provides a more concise syntax for writing proxies; ~BODY~ is simply a plist mapping variable names to their values. No ~let*~ needed!
+- ~params~ are inserted as ~with-controls~.
+# FIX: once find-synthdef exists, uncomment this (and add it to the ds docstring): - Without ~BODY~, just returns the synthdef.
+- If not specified by the user, auto-inserts parameters for ~dur~, ~tempo~, ~pan~, ~amp~, and ~out~ with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
+- Bindings named ~-~ or ~_~ are automatically declared ignorable.
+- When ~:fx~ is the first element of ~PARAMS~, allocate a 2-channel bus and bind ~sig~ to ~(in.ar BUS 2)~.
+- If ~out~ is bound in ~BODY~, its value is automatically used as the input for an ~out.ar~.
+- If there is no ~out~ in ~BODY~ but there is a ~sig~, ~sig~ is automatically fed into a ~b2~ inside an ~out.ar~. In other words, the ~pan~, ~amp~, and ~out~ arguments will "just work".
+- Can be provided as an ~:instrument~ in a ~pbind~ to set the parameters of the node.
+- Can be provided as an ~:out~ in a ~pbind~ to send the output of triggered synths to the node (for use with ~:fx~ nodes).
 
-Unlike ~defsynth~, you don't need to use ~let*~. Instead, specify the synthdef's body as a set of pairs of names and ugens, like ~cl-patterns:pbind~. Effectively, the ~let*~ is implied, as each name is given the ugen as its value.
-
-For example, you can write this:
+Example; you can write this:
 
 #+begin_src lisp
   (ds :foo ((gate 1) (freq 440))
@@ -100,10 +102,31 @@ Example:
 
 "Define Node"; syntax sugar wrapping ~proxy~. In addition to its standard functionality, it also does the following:
 
-- ~pbind~-like syntax (no ~let*~).
-- Can be referenced by omitting the body (i.e. ~(dn :name)~).
-- ~ARGS~ are inserted as ~with-controls~.
-- Bindings named ~_~ or ~-~ are automatically declared ignorable.
-- When ~:fx~ is provided as the first item in ~ARGS~, allocate a 2-channel bus and bind ~sig~ to ~(in.ar BUS 2)~.
+- Provides a more concise syntax for writing proxies; ~BODY~ is simply a plist mapping variable names to their values. No ~let*~ needed!
+- ~params~ are inserted as ~with-controls~.
+- Without ~BODY~, just returns the node.
+- If not specified by the user, auto-inserts parameters for ~dur~, ~tempo~, ~pan~, ~amp~, and ~out~ with sensible defaults, marked as ignorable, to avoid warnings if they aren't used.
+- Bindings named ~-~ or ~_~ are automatically declared ignorable.
+- ~:pos~ binding can be used to specify the ~:pos~ of the node within its group (i.e. ~:head~, ~:tail~, etc).
+- When ~:fx~ is the first element of ~PARAMS~, allocate a 2-channel bus and bind ~sig~ to ~(in.ar BUS 2)~.
+- If ~out~ is bound in ~BODY~, its value is automatically used as the input for an ~out.ar~.
+- If there is no ~out~ in ~BODY~ but there is a ~sig~, ~sig~ is automatically fed into a ~b2~ inside an ~out.ar~. In other words, the ~pan~, ~amp~, and ~out~ arguments will "just work".
 - Can be provided as an ~:instrument~ in a ~pbind~ to set the parameters of the node.
 - Can be provided as an ~:out~ in a ~pbind~ to send the output of triggered synths to the node (for use with ~:fx~ nodes).
+Example; you can write this:
+
+#+begin_src lisp
+  (dn :echo (:fx (time 1.0) (decay 0.5))
+    :sig (comb-c.ar sig 1 time decay)
+    :pos :tail)
+#+end_src
+
+instead of this:
+
+#+begin_src lisp
+  (proxy :echo
+         (with-controls ((time 1.0) (decay 0.5))
+           (let* ((sig (in.ar 16 2)) (sig (comb-c.ar sig 1 time decay)))
+             nil))
+         :pos :tail)
+#+end_src
