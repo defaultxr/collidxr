@@ -152,8 +152,9 @@ instead of this:
 
 #+begin_src lisp
   (proxy :echo
-         (with-controls ((time 1.0) (decay 0.5))
-           (let* ((sig (in.ar 16 2)) (sig (comb-c.ar sig 1 time decay)))
-             nil))
+         (with-controls ((time 1.0) (decay 0.5) (dur 1) (tempo 1) (pan 0) (amp 0.5))
+           (let* ((sig (in.ar 16 2))
+                  (sig (comb-c.ar sig 1 time decay)))
+             sig))
          :pos :tail)
 #+end_src
