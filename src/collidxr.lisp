@@ -121,7 +121,7 @@ See also: `ds'"
                (,(intern "TEMPO" *package*) 1)
                (,(intern "PAN" *package*) 0)
                (,(intern "AMP" *package*) 0.5)
-               ,(when out (list (intern "OUT" *package*) 0)))
+               ,@(when out `((,(intern "OUT" *package*) 0))))
              params)
     (unless (position (car x) params :key #'car)
       (setf params (append params (list x))))))
