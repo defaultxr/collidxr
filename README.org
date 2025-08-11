@@ -3,7 +3,7 @@
 
 This is a small collection of extensions for working with [[https://github.com/byulparan/cl-collider][cl-collider]]. It includes:
 
-- Pseugens (pseudo-ugens) like ~b2~.
+- Pseugens (pseudo-ugens) like ~b2~ and ~fbn~.
 - Syntax sugar like ~ds~ (wrapping ~defsynth~) and ~dn~ (wrapping ~proxy~).
 - Convenience functions like ~plot~.
 - Maybe more in the future?
@@ -34,6 +34,33 @@ Show a graphical plot of the provided data. Data can be:
 ** ~b2~
 
 Wrap the provided ugen in a ~pan2.ar~ or ~balance2.ar~ as appropriate. In other words, if ~IN~ is mono, wrap it in ~pan2.ar~, or if ~IN~ is stereo, wrap it in ~balance2.ar~. ~PAN~ and ~LEVEL~ are the panning and amplitude arguments, respectively.
+
+** ~fbnode~
+
+Feedback node, for creating feedback loops within synthdefs. It's recommended to use ~fbn~ to create an ~fbnode~, and then ~fbn-read~ and ~fbn-write~ to read and write to it.
+
+*** ~fbn~
+
+Create a ~fbnode~ for doing feedback within synthdefs. ~NUM-CHANNELS~ is the number of channels of the internal delay buffer. ~MAX-DELAY-TIME~ is the length in seconds that the delay buffer should be allocated to, defaulting to the minimum delay possible (one block). ~INTERPOLATION~ is the type of interpolation to use when reading from the delay, as per ~buf-rd.ar~.
+
+#+begin_src lisp
+  (defsynth :echoed ((freq 440) (delay 0.5) (feed 0.5) (amp 0.5) (out 0))
+    (let* ((fbn (fbn 2 0.5))
+           (sig (var-saw.ar (+ (rand.ir -2.0 (list 2.0 2.0)) freq) 0 0.5 (env-gen.kr (perc 0.01 0.25))))
+           (sig (rlpf.ar (+ sig (* feed (fbn-read fbn delay)))
+                         (* freq 0.9) 0.9)))
+      (fbn-write fbn sig)
+      (detect-silence.ar (leak-dc.ar sig) 1.0e-4 :time delay :act :free)
+      (out.ar out (* sig amp))))
+#+end_src
+
+*** ~fbn-read~
+
+Read from ~FBNODE~ at a time ~DELAY~ seconds from its input. ~DELAY~ defaults to the ~fbnode~'s max delay time.
+
+*** ~fbn-write~
+
+Write ~INPUT~ to ~FBNODE~.
 
 ** ~ds~
 

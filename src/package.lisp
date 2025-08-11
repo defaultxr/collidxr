@@ -10,6 +10,9 @@
   (:export #:plot
 
            #:b2
+           #:fbn
+           #:fbn-read
+           #:fbn-write
 
            #:ds
            #:synth-variant

@@ -24,7 +24,7 @@
     (vgplot:axis (list 0 (1- max) y-min y-max)) ; to make sure the plot only is as wide as the values we've provided, and doesn't stretch further.
     lists))
 
-;; FIX: for `plot', instead maybe use https://github.com/applied-science/emacs-vega-view?tab=readme-ov-file#common-lisp
+;; FIX: for `plot', instead maybe use https://github.com/applied-science/emacs-vega-view
 (defgeneric plot (object &rest args &key &allow-other-keys)
   (:documentation "Plot OBJECT."))
 
@@ -34,13 +34,81 @@
 (defmethod plot ((buffer cl-collider::buffer) &rest args &key &allow-other-keys)
   (apply #'plot (coerce (elt (buffer-to-array buffer) 0) 'list) args)) ; FIX: plot all channels
 
-;;; pseudo-ugens
+;;; b2
 
 (defun b2 (in &optional (pan 0) (level 1)) ; FIX: handle IN having more than 2 channels
   "Get IN wrapped in a `pan2.ar' or `balance2.ar' as appropriate. In other words, if IN is mono, wrap it in `pan2.ar', and if IN is stereo, wrap it in `balance2.ar'. PAN and LEVEL are the panning and amplitude arguments, respectively."
   (ecase (length (ensure-list in)) ; (eql 'cons (type-of in)) ; FIX: delete this comment if this works
     (1 (pan2.ar (ensure-car in) pan level))
     (2 (balance2.ar (elt in 0) (elt in 1) pan level))))
+
+;;; fbnode
+;; Inspired by the FbNode class in the "Feedback" SuperCollider quark; https://quark.sccode.org/Feedback/FbNode.html
+
+(defclass fbnode ()
+  ((num-channels :initarg :num-channels :initform 1)
+   (frames :initarg :frames :initform 1024)
+   (phase :initarg :phase :initform nil)
+   (max-delay-time :initarg :max-delay-time :initform nil)
+   (local-buf :initarg :local-buf :initform nil)
+   (interpolation :initarg :interpolation :initform 2))
+  (:documentation "Feedback node, for creating feedback loops within synthdefs. It's recommended to use `fbn' to create an `fbnode', and then `fbn-read' and `fbn-write' to read and write to it.
+
+See also: `fbn', `fbn-read', `fbn-write'"))
+
+(defmethod cl-collider::floatfy ((fbnode fbnode))
+  (with-slots (num-channels phase local-buf interpolation) fbnode
+    (let ((block-size (sc::server-options-block-size (sc::server-options *s*))))
+      (buf-rd.ar num-channels local-buf (sc::-~ phase block-size) 1 interpolation))))
+
+(defun fbn (&optional (num-channels 1) max-delay-time (interpolation 2))
+  "Create a `fbnode' for doing feedback within synthdefs. NUM-CHANNELS is the number of channels of the internal delay buffer. MAX-DELAY-TIME is the length in seconds that the delay buffer should be allocated to, defaulting to the minimum delay possible (one block). INTERPOLATION is the type of interpolation to use when reading from the delay, as per `buf-rd.ar'.
+
+Example:
+
+;; (defsynth :echoed ((freq 440) (delay 0.5) (feed 0.5) (amp 0.5) (out 0))
+;;  (let* ((fbn (fbn 2 0.5))
+;;         (sig (var-saw.ar (+ (rand.ir -2.0 (list 2.0 2.0)) freq) 0 0.5 (env-gen.kr (perc 0.01 0.25))))
+;;         (sig (rlpf.ar (+ sig (* feed (fbn-read fbn delay)))
+;;                       (* freq 0.9) 0.9)))
+;;    (fbn-write fbn sig)
+;;    (detect-silence.ar (leak-dc.ar sig) 1.0e-4 :time delay :act :free)
+;;    (out.ar out (* sig amp))))
+
+See also: `fbnode', `fbn-read', `fbn-write'"
+  (let* ((sample-rate (sr *s*))
+         (block-size (sc::server-options-block-size (sc::server-options *s*)))
+         (max-delay-time (or max-delay-time (/ block-size sample-rate)))
+         (frames (+ (* max-delay-time sample-rate) block-size))
+         (fbnode (make-instance 'fbnode :num-channels num-channels
+                                        :frames frames
+                                        :phase (phasor.ar 0 1 0 frames)
+                                        :max-delay-time max-delay-time
+                                        :local-buf (local-buf frames num-channels)
+                                        :interpolation interpolation)))
+    (clear-buf (slot-value fbnode 'local-buf))
+    fbnode))
+
+(defun fbn-read (fbnode &optional (delay (slot-value fbnode 'max-delay-time)))
+  "Read from FBNODE at a time DELAY seconds from its input. DELAY defaults to the `fbnode''s max delay time.
+
+See also: `fbnode', `fbn', `fbn-write'"
+  (let* ((block-size (sc::server-options-block-size (sc::server-options *s*)))
+         (sample-rate (sr *s*))
+         (offset (sc::min~ (sc::max~ (sc::*~ delay sample-rate) block-size)
+                           (sc::-~ (slot-value fbnode 'frames) block-size))))
+    (buf-rd.ar (slot-value fbnode 'num-channels)
+               (slot-value fbnode 'local-buf)
+               (sc::-~ (slot-value fbnode 'phase) offset)
+               1
+               (slot-value fbnode 'interpolation))))
+
+(defun fbn-write (fbnode input)
+  "Write INPUT to FBNODE.
+
+See also: `fbnode', `fbn', `fbn-read'"
+  (buf-wr.ar input (slot-value fbnode 'local-buf) (slot-value fbnode 'phase))
+  input)
 
 ;;; ds/dn utilities
 
