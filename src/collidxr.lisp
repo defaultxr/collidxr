@@ -40,42 +40,40 @@
   "Get IN wrapped in a `pan2.ar' or `balance2.ar' as appropriate. In other words, if IN is mono, wrap it in `pan2.ar', and if IN is stereo, wrap it in `balance2.ar'. PAN and LEVEL are the panning and amplitude arguments, respectively."
   (ecase (length (ensure-list in)) ; (eql 'cons (type-of in)) ; FIX: delete this comment if this works
     (1 (pan2.ar (ensure-car in) pan level))
-    (2 (balance2.ar (car in) (cadr in) pan level))))
+    (2 (balance2.ar (elt in 0) (elt in 1) pan level))))
 
-;;; ds
+;;; ds/dn utilities
 
-(defun modify-params (params) ; FIX: maybe we should try to auto-detect the use of a GATE argument and inject it if it's used? it would certainly be convenient...
+(defun standard-params (params &key (out t)) ; FIX: maybe we should try to auto-detect the use of a GATE argument and inject it if it's used? it would certainly be convenient...
   "Get PARAMS, a `defsynth' argument list, altered to include dur, tempo, amp, pan, and out arguments if they're not already specified.
 
 See also: `ds'"
-  (let ((param-names (mapcar #'car params)))
-    (dolist (x (list (list (intern "DUR" *package*) 1)
-                     (list (intern "TEMPO" *package*) 1)
-                     (list (intern "AMP" *package*) 0.5)
-                     (list (intern "PAN" *package*) 0)
-                     (list (intern "OUT" *package*) 0)))
-      (unless (position (car x) param-names)
-        (setf params (append params (list x)))))
-    params))
+  (setf params (if (eql :fx (car params)) (cdr params) params))
+  (dolist (x `((,(intern "DUR" *package*) 1)
+               (,(intern "TEMPO" *package*) 1)
+               (,(intern "PAN" *package*) 0)
+               (,(intern "AMP" *package*) 0.5)
+               ,(when out (list (intern "OUT" *package*) 0)))
+             params)
+    (unless (position (car x) params :key #'car)
+      (setf params (append params (list x))))))
 
-;;; ds
-
-(defun ds-convert-body (body)
+(defun body-plist-code (body)
   "Convert BODY, a plist of keys and values a la `pbind'. Any key with the name _ or - is changed into a gensym. All gensyms and ignorable symbols are returned as a second value. Metadata such as synthdef variant information is provided as the third return value."
   (labels ((ignorable-symbol (symbol)
              (position (symbol-name symbol) (list "_" "-") :test #'string=))
            (parse-value (value last-gensym)
-             (if (listp value)
-                 (loop :for idx :from 0
-                       :for i :in value
-                       :if (= idx 0)
-                         :collect i
-                       :else
-                         :collect (parse-value i last-gensym))
-                 (if (and (symbolp value)
-                          (ignorable-symbol value))
-                     last-gensym
-                     value))))
+             (cond ((listp value)
+                    (loop :for idx :from 0
+                          :for i :in value
+                          :if (zerop idx)
+                            :collect i
+                          :else
+                            :collect (parse-value i last-gensym)))
+                   ((and (symbolp value)
+                         (ignorable-symbol value))
+                    last-gensym)
+                   (t value))))
     (let (ignored-variables
           metadata)
       (values (loop :for (key value) :on body :by #'cddr
@@ -94,23 +92,7 @@ See also: `ds'"
               ignored-variables
               (nreverse metadata)))))
 
-;; FIX: `synthdef-metadata' can't be used for input-bus because it is common to ALL synths of that name, not the specific one!!!!!!! maybe use (sc::meta node) to store a plist of metadata instead?
-(defun parse-ds-args-and-body (synth-name args body &key (type 'ds))
-  "Parse a lambda list for a synth or node definition. Returns the altered lambda list, altered body, gensyms, and metadata as values."
-  (when (eql 0 (position :fx args))
-    (setf args (cdr args))
-    (ecase type
-      (ds (setf body (list* :sig `(in.ar in 2) body))
-          (unless (find 'in args :test #'string-equal :key #'car)
-            (setf args (list* (list (intern "IN") 0) args))))
-      (dn (unless (synthdef-metadata synth-name :input-bus)
-            (setf (synthdef-metadata synth-name :input-bus) (bus-audio :chanls 2)))
-          (setf body (list* :sig `(in.ar ,(busnum (synthdef-metadata synth-name :input-bus)) 2) body)))))
-  ;; FIX: :ctl ?
-  (multiple-value-bind (cbody gensyms metadata) (ds-convert-body body)
-    (values args cbody gensyms metadata)))
-
-(defparameter *ds-synth-package* (uiop:ensure-package 'synths) ; FIX: make optional?
+(defparameter *ds-synth-package* (uiop:ensure-package 'synths) ; FIX: make optional - if it's nil, just use the current package
   "The package that `ds' will define synths in.")
 
 ;;; ds
@@ -138,38 +120,45 @@ Example:
 
 See also: `dn'"
   (check-type body property-list)
-  (let ((fx-p (eql :fx (car args)))
-        (sig (intern "SIG" *package*))
-        (dur (intern "DUR" *package*))
-        (tempo (intern "TEMPO" *package*))
-        (pan (intern "PAN" *package*))
-        (amp (intern "AMP" *package*))
-        (out (intern "OUT" *package*)))
-    (multiple-value-bind (args body gensyms metadata) (parse-ds-args-and-body name args body :type 'ds)
-      (let ((args (modify-params args)))
-        `(prog1 (defsynth ,name ,args
-                  (declare (ignorable ,dur ,tempo))
-                  (let* ,(remove out body :key #'car)
-                    ,@(when gensyms
-                        `((declare (ignorable ,@gensyms))))
-                    (,(if fx-p 'replace-out.ar 'out.ar)
-                     ,out
-                     ,(or (cadr (assoc out body))
-                          `(b2 ,sig ,pan ,(if (assoc 'env body)
-                                              `(* env ,amp)
-                                              amp))))))
-           ,@(when metadata
-               `((doplist (k v (list ,@metadata))
-                   (setf (synthdef-metadata ,name k) v))))
-           ,@(let ((package-symbol (ensure-symbol name *ds-synth-package*))
-                   (package-name (package-name *ds-synth-package*))
-                   (defun-args (append (list '&key) (mapcar (fn (subseq _ 0 2)) args))))
-               `((cl:defun ,package-symbol ,defun-args
-                   (cl-collider:synth ',name
-                                      ,@(loop :for arg :in args
-                                              :for arg-name := (car arg)
-                                              :append (list (make-keyword (symbol-name arg-name)) arg-name))))
-                 (export ',package-symbol ,package-name))))))))
+  ;; (when (and (null args-p) ; FIX: uncomment when `sc:find-synthdef' exists
+  ;;            (null body))
+  ;;   (return-from ds `(find-synthdef ,name)))
+  (let* ((fx-p (eql :fx (car params)))
+         (sig (intern "SIG" *package*))
+         (dur (intern "DUR" *package*))
+         (tempo (intern "TEMPO" *package*))
+         (pan (intern "PAN" *package*))
+         (amp (intern "AMP" *package*))
+         (out (intern "OUT" *package*))
+         (params (standard-params params)))
+    (when fx-p
+      (setf body (list* :sig `(in.ar in 2) body))
+      (unless (find 'in params :test #'string-equal :key #'car)
+        (setf params (list* (list (intern "IN" *package*) 0) params))))
+    (multiple-value-bind (body gensyms metadata) (body-plist-code body)
+      `(prog1 (defsynth ,name ,params
+                (declare (ignorable ,dur ,tempo))
+                (let* ,(remove out body :key #'car)
+                  ,@(when gensyms
+                      `((declare (ignorable ,@gensyms))))
+                  (,(if fx-p 'replace-out.ar 'out.ar)
+                   ,out
+                   ,(or (cadr (assoc out body))
+                        `(b2 ,sig ,pan ,(if (assoc 'env body)
+                                            `(* env ,amp) ; FIX: if the user modifies AMP within the body, does it actually take effect here?
+                                            amp))))))
+         ,@(when metadata
+             `((doplist (k v (list ,@metadata))
+                 (setf (synthdef-metadata ,name k) v))))
+         ,@(let ((package-symbol (ensure-symbol name *ds-synth-package*))
+                 (package-name (package-name *ds-synth-package*))
+                 (defun-args (append (list '&key) (mapcar (fn (subseq _ 0 2)) params))))
+             `((cl:defun ,package-symbol ,defun-args
+                 (cl-collider:synth ',name
+                                    ,@(loop :for arg :in params
+                                            :for arg-name := (car arg)
+                                            :append (list (make-keyword (symbol-name arg-name)) arg-name))))
+               (export ',package-symbol ,package-name)))))))
 
 (defun synth-variant (name &rest args) ; FIX: should also accept :variant or :-variant in ARGS to specify the variant
   "Like `cl-collider:synth', but can also start a synth variant. To specify a variant, NAME should be in the format NAME.VARIANT.
@@ -194,13 +183,13 @@ See also: `cl-collider:synth'"
 
 ;;; dn
 
-(defun find-dn (name)
-  "Find a `dn' by name."
+(defun find-proxy (name)
+  "Get the node for the `proxy' named NAME."
   (gethash name (cl-collider::node-proxy-table *s*)))
 
-;; FIX: use sig if out is not provided
 ;; FIX: is it possible to have TEMPO automatically updated when the tempo in cl-patterns is changed?
-(defmacro dn (name &optional (params nil params-p) &body body) ; FIX: should also include dur, tempo, etc, as per `add-standard-params'
+;; FIX: `synthdef-metadata' shouldn't be used for input-bus because it is common to ALL synths of that name, not the specific one!!!!!!! maybe use (sc::meta node) to store a plist of metadata instead?
+(defmacro dn (name &optional (params nil params-p) &body body) ; FIX: should also include dur, tempo, etc, as per `standard-params'
   "\"Define Node\"--define a named node proxy. Similar to `cl-collider:proxy', but with the following additional features:
 
 - Provides a more concise syntax for writing proxies; BODY is simply a plist mapping variable names to their values. No `let*' needed!
@@ -221,11 +210,12 @@ Example:
 ;;   :sig (comb-c.ar sig 1 time decay))
 
 See also: `ds'"
-  (when (and (null args-p)
+  (check-type body property-list)
+  (when (and (null params-p)
              (null body))
-    (return-from dn `(find-dn ,name)))
-  (when (and args-p
-             (null args)
+    (return-from dn `(find-proxy ,name)))
+  (when (and params-p
+             (null params)
              (or (null body)
                  (equal (list nil) body)))
     (return-from dn `(progn
@@ -234,18 +224,26 @@ See also: `ds'"
                          (bus-free (synthdef-metadata ,name))
                          (setf (synthdef-metadata ,name :input-bus) nil))
                        (cl-collider:proxy ,name nil))))
-  (let ((pos (or (getf body :-pos) :head))
-        (out (intern "OUT" *package*)))
-    (remove-from-plistf body :-pos)
-    (multiple-value-bind (args body gensyms metadata) (parse-ds-args-and-body name args body :type 'dn)
-      `(progn
-         (cl-collider:proxy ,name
-                            (with-controls ,args
-                              (let* ,(remove out body :key #'car)
-                                ,@(when gensyms
-                                    `((declare (ignorable ,@gensyms))))
-                                ,(cadr (assoc out body))))
-                            :pos ,pos)
+  (let* ((fx-p (eql :fx (car params)))
+         (pos (getf body :pos :head))
+         (sig (intern "SIG" *package*))
+         (out (intern "OUT" *package*))
+         (params (standard-params params :out nil)))
+    (remove-from-plistf body :pos)
+    (when fx-p
+      (unless (synthdef-metadata name :input-bus)
+        (setf (synthdef-metadata name :input-bus) (bus-audio :chanls 2)))
+      (setf body (list* :sig `(in.ar ,(busnum (synthdef-metadata name :input-bus)) 2) body)))
+    (multiple-value-bind (body gensyms metadata) (body-plist-code body)
+      `(prog1
+           (cl-collider:proxy ,name
+                              (with-controls ,params
+                                (let* ,(remove out body :key #'car)
+                                  ,@(when gensyms
+                                      `((declare (ignorable ,@gensyms))))
+                                  ,(or (cadr (assoc out body))
+                                       sig)))
+                              :pos ,pos)
          ,@(when metadata
              `((doplist (k v (list ,@metadata))
                  (setf (synthdef-metadata ,name k) v))))))))
