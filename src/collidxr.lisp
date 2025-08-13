@@ -293,7 +293,7 @@ See also: `ds'"
                          (setf (synthdef-metadata ,name :input-bus) nil))
                        (cl-collider:proxy ,name nil))))
   (let* ((fx-p (eql :fx (car params)))
-         (pos (getf body :pos :head))
+         (pos (getf body :pos :tail)) ; FIX: handle group etc also. also `ds' should handle these too.
          (sig (intern "SIG" *package*))
          (dur (intern "DUR" *package*))
          (tempo (intern "TEMPO" *package*))
