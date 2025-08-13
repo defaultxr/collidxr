@@ -295,6 +295,10 @@ See also: `ds'"
   (let* ((fx-p (eql :fx (car params)))
          (pos (getf body :pos :head))
          (sig (intern "SIG" *package*))
+         (dur (intern "DUR" *package*))
+         (tempo (intern "TEMPO" *package*))
+         (pan (intern "PAN" *package*))
+         (amp (intern "AMP" *package*))
          (out (intern "OUT" *package*))
          (params (standard-params params :out nil)))
     (remove-from-plistf body :pos)
@@ -306,6 +310,7 @@ See also: `ds'"
       `(prog1
            (cl-collider:proxy ,name
                               (with-controls ,params
+                                (declare (ignorable ,dur ,tempo ,pan ,amp))
                                 (let* ,(remove out body :key #'car)
                                   ,@(when gensyms
                                       `((declare (ignorable ,@gensyms))))
