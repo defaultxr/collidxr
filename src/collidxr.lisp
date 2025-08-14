@@ -288,12 +288,15 @@ See also: `ds'"
                  (equal (list nil) body)))
     (return-from dn `(progn
                        (when (synthdef-metadata ,name :input-bus)
-                         ;; FIX: make sure the bus is freed when the `dn' is stopped with `free', `release', etc.
+                         ;; FIX: make sure the bus is freed when the `dn' is stopped with `free', `release', etc?
                          (bus-free (synthdef-metadata ,name))
                          (setf (synthdef-metadata ,name :input-bus) nil))
                        (cl-collider:proxy ,name nil))))
   (let* ((fx-p (eql :fx (car params)))
-         (pos (getf body :pos :tail)) ; FIX: handle group etc also. also `ds' should handle these too.
+         (params (cdr params))
+         (id (cadr (assoc :id params :test #'string=))) ; FIX: `ds' should handle id, pos, and to too.
+         (pos (or (cadr (assoc :pos params :test #'string=)) (if fx-p :tail :head)))
+         (to (or (cadr (assoc :to params :test #'string=)) 1))
          (sig (intern "SIG" *package*))
          (dur (intern "DUR" *package*))
          (tempo (intern "TEMPO" *package*))
@@ -301,7 +304,8 @@ See also: `ds'"
          (amp (intern "AMP" *package*))
          (out (intern "OUT" *package*))
          (params (standard-params params :out nil)))
-    (remove-from-plistf body :pos)
+    (dolist (arg (list :id :pos :to))
+      (removef params arg :key #'car :test #'string=))
     (when fx-p
       (unless (synthdef-metadata name :input-bus)
         (setf (synthdef-metadata name :input-bus) (bus-audio :chanls 2)))
@@ -316,7 +320,9 @@ See also: `ds'"
                                       `((declare (ignorable ,@gensyms))))
                                   ,(or (cadr (assoc out body))
                                        sig)))
-                              :pos ,pos)
+                              :id ,id
+                              :pos ,pos
+                              :to ,to)
          ,@(when metadata
              `((doplist (k v (list ,@metadata))
                  (setf (synthdef-metadata ,name k) v))))))))

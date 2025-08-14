@@ -143,9 +143,8 @@ Example:
 Example; you can write this:
 
 #+begin_src lisp
-  (dn :echo (:fx (time 1.0) (decay 0.5))
-    :sig (comb-c.ar sig 1 time decay)
-    :pos :tail)
+  (dn :echo (:fx (time 1.0) (decay 0.5) (pos :head))
+    :sig (comb-c.ar sig 1 time decay))
 #+end_src
 
 instead of this:
@@ -156,5 +155,5 @@ instead of this:
            (let* ((sig (in.ar 16 2))
                   (sig (comb-c.ar sig 1 time decay)))
              sig))
-         :pos :tail)
+         :pos :head) ; note that :pos defaults to :head for non-:fx `dn's and :tail for :fx `dn's
 #+end_src
