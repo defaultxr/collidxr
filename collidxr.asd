@@ -2,7 +2,7 @@
 
 (defsystem #:collidxr
   :name "collidxr"
-  :description "modula t.'s extensions for cl-collider."
+  :description "A collection of syntax sugar and conveniences extending cl-collider, a Common Lisp interface to the SuperCollider sound synthesis server."
   :version "0.8"
   :author "modula t."
   :license "MIT"
@@ -10,6 +10,7 @@
   :bug-tracker "https://github.com/defaultxr/collidxr/issues"
   :mailto "modula-t at pm dot me"
   :source-control (:git "git@github.com:defaultxr/collidxr.git")
+  :defsystem-depends-on (#:mutility)
   :depends-on (#:alexandria
                #:mutility
                #:trivial-types
@@ -30,6 +31,7 @@
   :license "MIT"
   :depends-on (#:collidxr
                #:fiveam
+               #:mutility
                #:mutility/test-helpers)
   :pathname "t/"
   :serial t
