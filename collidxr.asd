@@ -22,7 +22,7 @@
                (:file "collidxr"))
   :in-order-to ((test-op (test-op "collidxr/tests")))
   :perform (load-op :after (op c)
-                    (mutility:auto-load-systems '(("cl-patterns" "cl-patterns/collidxr")))))
+                    (uiop:symbol-call :mutility :auto-load-systems '(("cl-patterns" "cl-patterns/collidxr")))))
 
 (defsystem #:collidxr/tests
   :name "collidxr/tests"
