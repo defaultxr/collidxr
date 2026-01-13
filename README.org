@@ -14,11 +14,7 @@ Refer to the "Features" section below for a more detailed overview of the provid
 
 * Intro
 
-collidxr is not yet part of Quicklisp, but it [[https://github.com/quicklisp/quicklisp-projects/issues/2494][will be added in the future]].
-
-In the meantime, it can be installed manually by cloning the repo into your Quicklisp ~local-projects~ directory.
-
-Once you've done that, you can simply run ~(ql:quickload "collidxr")~ in your REPL to load it into Lisp.
+collidxr is now part of Quicklisp, so you can simply run ~(ql:quickload "collidxr")~ in your REPL to load it into Lisp.
 
 * Features
 
