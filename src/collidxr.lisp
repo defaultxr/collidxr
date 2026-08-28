@@ -293,7 +293,7 @@ See also: `ds'"
                          (setf (synthdef-metadata ,name :input-bus) nil))
                        (cl-collider:proxy ,name nil))))
   (let* ((fx-p (eql :fx (car params)))
-         (params (cdr params))
+         (params (if fx-p (cdr params) params))
          (id (cadr (assoc :id params :test #'string=))) ; FIX: `ds' should handle id, pos, and to too.
          (pos (or (cadr (assoc :pos params :test #'string=)) (if fx-p :tail :head)))
          (to (or (cadr (assoc :to params :test #'string=)) 1))
